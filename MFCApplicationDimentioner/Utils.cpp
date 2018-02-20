@@ -32,12 +32,12 @@ cv::Mat CVUtils::PoseEstimateNotes(vector<cv::Point3d> points, vector<cv::Point2
 
 Vec3b CVUtils::MeanColor(Mat& imageCopy)
 {
-	double asum[3];
+	double asum[3] = {0,0,0};
 	for (size_t i = 0; i < imageCopy.cols; i++)
 	{
 		for (size_t j = 0; j < imageCopy.rows; j++)
 		{
-			Vec3b pto = imageCopy.at<Vec3b>(Point2d(j, i));
+			Vec3b pto = imageCopy.at<Vec3b>(j, i);
 
 			asum[0] += pto[0];
 			asum[1] += pto[1];
@@ -52,7 +52,7 @@ Vec3b CVUtils::MeanColor(Mat& imageCopy)
 bool CVUtils::ExpandColor(int row, int column, Mat& imageCopy, Vec3b& note_color, Vec3b& mark_color, std::function<bool(Vec3b acolor)> BelogsToNote, int minimum_amount_pixels, Point2d& center)
 {
 	int quantity = 0;
-	auto mm = new int[2][8]{ {},{} };
+	auto mm = new int[8][2]{ {0,-1},{1,-1},{1,0},{1,1},{0,1},{-1,1},{-1,0},{-1,-1} };
 
 	std::deque<Point2d> buffer;
 
@@ -62,7 +62,7 @@ bool CVUtils::ExpandColor(int row, int column, Mat& imageCopy, Vec3b& note_color
 	buffer.push_front(Point2d(column, row));
 
 	//mark original point
-	auto aptr = imageCopy.at<Vec3b>(Point2d(column, row));
+	auto aptr = imageCopy.at<Vec3b>(column, row);
 	aptr[0] = mark_color[0];
 	aptr[1] = mark_color[1];
 	aptr[2] = mark_color[2];
@@ -76,22 +76,26 @@ bool CVUtils::ExpandColor(int row, int column, Mat& imageCopy, Vec3b& note_color
 		for (size_t i = 0; i < 8; i++)
 		{
 			Point2d piv(curr.x + mm[i][0], curr.y + mm[i][1]);
-			Vec3b pto = imageCopy.at<Vec3b>(piv);   //
-			if (BelogsToNote(pto))
+			if (piv.x >= 0 && piv.y >= 0 && piv.x < imageCopy.cols && piv.y < imageCopy.rows)
 			{
-				//mark original point
-				aptr = imageCopy.at<Vec3b>(piv);
-				aptr[0] = mark_color[0];
-				aptr[1] = mark_color[1];
-				aptr[2] = mark_color[2];
+				Vec3b pto = imageCopy.at<Vec3b>(piv.y, piv.x);   //
+				if (BelogsToNote(pto))
+				{
+					//mark original point
+					aptr = imageCopy.at<Vec3b>(piv);
+					aptr[0] = mark_color[0];
+					aptr[1] = mark_color[1];
+					aptr[2] = mark_color[2];
 
-				// add the point
-				buffer.push_front(piv);
+					// add the point
+					buffer.push_front(piv);
 
-				acummulate_x += piv.x;
-				acummulate_y += piv.y;
-				num_points++;
+					acummulate_x += piv.x;
+					acummulate_y += piv.y;
+					num_points++;
+				}
 			}
+			
 		}
 	}
 
@@ -112,15 +116,15 @@ vector<Point2d> CVUtils::FindNotesCenters(Mat& image, Vec3b note_color, std::fun
 	Vec3b mark_color; //TODO
 	int minimum_amount_pixels = 30;
 
-	for (size_t i = 0; i < image.rows; i++)
+	for (size_t j = 0; j < image.rows; j++)
 	{
-		for (size_t j = 0; j < image.cols; j++)
+		for (size_t i = 0; i < image.cols; i++)
 		{
-			Vec3b curr_color = image.at<Vec3b>(Point(j, i));
+			Vec3b curr_color = image.at<Vec3b>(j, i);
 			if (BelogsToNote(curr_color))
 			{
 				Point2d center;
-				if (ExpandColor(i, j, imageCopy, note_color, mark_color, BelogsToNote, minimum_amount_pixels, center))
+				if (ExpandColor(j, i, imageCopy, note_color, mark_color, BelogsToNote, minimum_amount_pixels, center))
 				{
 					result.push_back(center);
 				}
@@ -204,9 +208,16 @@ void CVUtils::AKAZE(Mat& img1, Mat& img2, Mat& homography, float nn_match_ratio,
 
 void CVUtils::DisplayCamera()
 {
+
+	Mat image;
+	image = imread("D:\\Adiel\\opencv\\MFCDimentioner\\MFCApplicationDimentioner\\pink.png", CV_LOAD_IMAGE_COLOR);   // Read the file
+	Vec3b bg_color = CVUtils::MeanColor(image);
+	//Vec3b tempVal = mean(image);
+
 	VideoCapture cap(0); // open the default camera
 	if (!cap.isOpened())  // check if we succeeded
 		return;
+
 
 	Mat edges;
 	namedWindow("edges", 1);
@@ -214,11 +225,17 @@ void CVUtils::DisplayCamera()
 	{
 		Mat frame;
 		cap >> frame; // get a new frame from camera
-		cvtColor(frame, edges, COLOR_BGR2GRAY);
-		GaussianBlur(edges, edges, Size(7, 7), 1.5, 1.5);
-		Canny(edges, edges, 0, 30, 3);
-		//imshow("edges", edges);
-		//if (waitKey(30) >= 0) break;
+		//cvtColor(frame, edges, COLOR_BGR2GRAY);
+		//GaussianBlur(edges, edges, Size(7, 7), 1.5, 1.5);
+		//Canny(edges, edges, 0, 30, 3);
+
+		std::vector<Point2d> points = CVUtils::FindNotesCenters(frame, bg_color, [&](Vec3b acolor){
+			return abs(acolor[0] - bg_color[0]) + abs(acolor[1] - bg_color[1]) + abs(acolor[2] - bg_color[2])   <  130;
+		});
+
+
+		imshow("edges", frame);
+		if (waitKey(30) >= 0) break;
 	}
 	// the camera will be deinitialized automatically in VideoCapture destructor
 }
