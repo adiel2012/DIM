@@ -5,6 +5,9 @@
 #include "afxwinappex.h"
 #include "afxdialogex.h"
 
+#include <thread>
+#include "Utils.h"
+
 
 
 BEGIN_MESSAGE_MAP(CCameraCalibratorDialog, CDialogEx)
@@ -29,9 +32,15 @@ void CCameraCalibratorDialog::OnClickedButtonClose()
 }
 
 
+void ff()
+{
+	CVUtils::DisplayCamera();
+}
+
 void CCameraCalibratorDialog::OnClickedButtonCalibrate()
 {
 	// TODO: Add your control notification handler code here
 
+	std::thread first(ff);
 
 }
